@@ -5,14 +5,18 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#000000">
 <link rel="manifest" href="./manifest.webmanifest">
-<title>RetroLens — 3D Hand Tracking</title>
+<title>Finger Tracking — Gesture FX</title>
 <style>
 *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000;color:#fff;font:14px/1.4 system-ui,sans-serif}
 #view{position:fixed;inset:0;background:#000}video,#overlay{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}#overlay{pointer-events:none}
 #three{position:absolute;inset:0;width:100%;height:100%;transform:scaleX(-1);pointer-events:none}
 #top{position:absolute;top:env(safe-area-inset-top,0);left:0;right:0;display:flex;align-items:center;justify-content:space-between;padding:14px 16px;pointer-events:none}
 #status{padding:7px 11px;border-radius:99px;background:#0009;border:1px solid #ffffff35;font-size:12px;backdrop-filter:blur(10px)}
-#count{font-size:12px;color:#fff;background:#0009;padding:7px 11px;border-radius:99px;border:1px solid #ffffff35}
+#count,#effect{font-size:12px;color:#fff;background:#0009;padding:7px 11px;border-radius:99px;border:1px solid #ffffff35;backdrop-filter:blur(10px)}
+#top{gap:7px;flex-wrap:wrap}
+@keyframes fxGlitch{0%,100%{transform:scaleX(-1) translate(0)}20%{transform:scaleX(-1) translate(3px,-1px)}40%{transform:scaleX(-1) translate(-3px,1px)}60%{transform:scaleX(-1) translate(1px,2px)}80%{transform:scaleX(-1) translate(-1px,-2px)}}
+body.fx-glitch video{animation:fxGlitch .18s infinite}
+
 #bottom{position:absolute;bottom:calc(16px + env(safe-area-inset-bottom,0));left:0;right:0;display:flex;justify-content:center;gap:9px;padding:0 12px}
 button{border:1px solid #ffffff55;background:#101010d9;color:white;border-radius:999px;padding:12px 17px;font:600 13px system-ui;backdrop-filter:blur(12px);cursor:pointer}
 button.primary{background:#fff;color:#000;border-color:#fff}button:disabled{opacity:.45}
@@ -26,7 +30,7 @@ button.primary{background:#fff;color:#000;border-color:#fff}button:disabled{opac
   <video id="camera" playsinline muted></video>
   <canvas id="overlay"></canvas>
   <div id="three"></div>
-  <div id="top"><span id="status">Kamera belum aktif</span><span id="count">0 / 10 jari</span></div>
+  <div id="top"><span id="status">Kamera belum aktif</span><span id="count">0 / 10 jari</span><span id="effect">FX: Normal</span></div>
   <div id="hint"><strong>3D Hand Tracking</strong>Aktifkan kamera dan tampilkan kedua tangan</div>
   <div id="bottom"><button class="primary" id="start">Aktifkan kamera</button><button id="switch">Ganti kamera</button><button id="stop" disabled>Berhenti</button></div>
 </div>
@@ -34,7 +38,7 @@ button.primary{background:#fff;color:#000;border-color:#fff}button:disabled{opac
 import {FilesetResolver,HandLandmarker} from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
 
-const video=document.querySelector('#camera'),statusEl=document.querySelector('#status'),countEl=document.querySelector('#count'),hint=document.querySelector('#hint');
+const video=document.querySelector('#camera'),statusEl=document.querySelector('#status'),countEl=document.querySelector('#count'),effectEl=document.querySelector('#effect'),hint=document.querySelector('#hint');
 const startBtn=document.querySelector('#start'),stopBtn=document.querySelector('#stop'),switchBtn=document.querySelector('#switch');
 const host=document.querySelector('#three');
 const renderer=new THREE.WebGLRenderer({alpha:true,antialias:true});
@@ -47,11 +51,37 @@ const bonePairs=[[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[1
 const hands=Array.from({length:2},(_,h)=>{const color=h===0?0x55eaff:0xff75d6,material=new THREE.MeshStandardMaterial({color,emissive:color,emissiveIntensity:1.1,metalness:.25,roughness:.25});const jointGeo=new THREE.SphereGeometry(.095,12,10),joints=Array.from({length:21},()=>{const m=new THREE.Mesh(jointGeo,material);scene.add(m);return m});const boneGeo=new THREE.CylinderGeometry(.035,.035,1,8),bones=bonePairs.map(()=>{const m=new THREE.Mesh(boneGeo,material);scene.add(m);return m});return{joints,bones}});
 function resize(){renderer.setSize(innerWidth,innerHeight);camera3d.aspect=innerWidth/innerHeight;camera3d.updateProjectionMatrix()}addEventListener('resize',resize);
 function update3d(landmarks){let fingers=0;hands.forEach((hand,h)=>{const lm=landmarks[h];hand.joints.forEach((obj,i)=>{if(!lm){obj.visible=false;return}obj.visible=true;const p=lm[i];obj.position.set((.5-p.x)*12,(.5-p.y)*7.5,-p.z*3);});hand.bones.forEach((obj,i)=>{const pair=bonePairs[i];if(!lm){obj.visible=false;return}obj.visible=true;const a=hand.joints[pair[0]].position,b=hand.joints[pair[1]].position,d=new THREE.Vector3().subVectors(b,a);obj.position.copy(a).add(b).multiplyScalar(.5);obj.scale.set(1,d.length(),1);obj.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize())});if(lm){const tips=[4,8,12,16,20];fingers+=tips.length}});countEl.textContent=(landmarks.length*5)+' / 10 jari';renderer.render(scene,camera3d)}
+
+const effects=[
+{name:'Normal',filter:'none'},
+{name:'Cartoon',filter:'saturate(2.1) contrast(1.65) brightness(1.08)'},
+{name:'Soft Blur',filter:'blur(3px) saturate(1.35)'},
+{name:'Motion Blur',filter:'blur(1.5px) contrast(1.2)'},
+{name:'Glitch RGB',filter:'saturate(2.8) contrast(1.5) hue-rotate(35deg)',className:'fx-glitch'},
+{name:'Neon',filter:'saturate(2.8) contrast(1.55) brightness(1.2)'},
+{name:'Thermal',filter:'hue-rotate(155deg) saturate(3) contrast(1.35)'},
+{name:'Sketch',filter:'grayscale(1) contrast(2.4) brightness(1.35)'},
+{name:'X-Ray',filter:'invert(1) grayscale(1) contrast(1.7)'},
+{name:'Pixel Pop',filter:'saturate(2.2) contrast(1.8)',pixel:true},
+{name:'Vintage',filter:'sepia(.85) contrast(1.15) saturate(1.25)'},
+{name:'Negative',filter:'invert(1) hue-rotate(180deg)'},
+{name:'Dream',filter:'blur(1px) brightness(1.25) saturate(1.7)'},
+{name:'Cyberpunk',filter:'hue-rotate(265deg) saturate(2.8) contrast(1.45)'},
+{name:'Mono',filter:'grayscale(1) contrast(1.35)'},
+{name:'Aqua',filter:'hue-rotate(145deg) saturate(1.8)'},
+{name:'Fire',filter:'hue-rotate(325deg) saturate(2.5) contrast(1.3)'},
+{name:'Invert Glow',filter:'invert(.82) hue-rotate(180deg) saturate(2.2)'}
+];
+let effectIndex=0,touching=false,lastTrigger=0;
+function setEffect(index){effectIndex=(index+effects.length)%effects.length;const fx=effects[effectIndex];document.body.className=fx.className||'';video.style.filter=fx.filter;video.style.imageRendering=fx.pixel?'pixelated':'auto';effectEl.textContent='FX: '+fx.name;}
+function detectFingerTouch(lm){if(!lm||lm.length<2)return false;const tips=[4,8,12,16,20];let closest=Infinity;for(const a of tips)for(const b of tips){const p=lm[0][a],q=lm[1][b];const d=Math.hypot(p.x-q.x,p.y-q.y);if(d<closest)closest=d;}return closest<.075;}
+function handleTouchGesture(lm){const now=performance.now(),active=detectFingerTouch(lm);if(active&&!touching&&now-lastTrigger>550){setEffect(effectIndex+1);lastTrigger=now;}touching=active;}
 let landmarker=null,stream=null,running=false,facing='user',lastTime=-1;
 async function start(){try{statusEl.textContent='Memuat model…';if(!landmarker){const vision=await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');landmarker=await HandLandmarker.createFromOptions(vision,{baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',delegate:'GPU'},runningMode:'VIDEO',numHands:2,minHandDetectionConfidence:.55,minHandPresenceConfidence:.5,minTrackingConfidence:.5})}stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:facing,width:{ideal:1280},height:{ideal:720}},audio:false});video.srcObject=stream;await video.play();running=true;startBtn.disabled=true;stopBtn.disabled=false;hint.hidden=true;statusEl.textContent='Mencari tangan…';requestAnimationFrame(loop)}catch(e){statusEl.textContent='Kamera gagal dibuka';alert('Kamera tidak bisa diakses: '+e.message+' Pastikan izin kamera aktif dan situs menggunakan HTTPS.')}} 
-function loop(now){if(!running)return;if(video.readyState>=2&&video.currentTime!==lastTime){lastTime=video.currentTime;const result=landmarker.detectForVideo(video,now),lm=result.landmarks||[];update3d(lm);statusEl.textContent=lm.length?lm.length+' tangan terlacak · 3D aktif':'Arahkan tangan ke kamera';hint.hidden=lm.length>0}requestAnimationFrame(loop)}
-function stop(){running=false;if(stream)stream.getTracks().forEach(t=>t.stop());stream=null;video.srcObject=null;hands.forEach(hand=>{hand.joints.forEach(x=>x.visible=false);hand.bones.forEach(x=>x.visible=false)});renderer.render(scene,camera3d);startBtn.disabled=false;stopBtn.disabled=true;countEl.textContent='0 / 10 jari';statusEl.textContent='Kamera berhenti';hint.hidden=false}
+function loop(now){if(!running)return;if(video.readyState>=2&&video.currentTime!==lastTime){lastTime=video.currentTime;const result=landmarker.detectForVideo(video,now),lm=result.landmarks||[];update3d(lm);handleTouchGesture(lm);statusEl.textContent=lm.length?lm.length+' tangan terlacak · 3D aktif':'Arahkan tangan ke kamera';hint.hidden=lm.length>0}requestAnimationFrame(loop)}
+function stop(){running=false;if(stream)stream.getTracks().forEach(t=>t.stop());stream=null;video.srcObject=null;hands.forEach(hand=>{hand.joints.forEach(x=>x.visible=false);hand.bones.forEach(x=>x.visible=false)});renderer.render(scene,camera3d);startBtn.disabled=false;stopBtn.disabled=true;countEl.textContent='0 / 10 jari';touching=false;setEffect(0);statusEl.textContent='Kamera berhenti';hint.hidden=false}
 startBtn.onclick=start;stopBtn.onclick=stop;switchBtn.onclick=async()=>{facing=facing==='user'?'environment':'user';if(running){stop();await start()}};renderer.setAnimationLoop(()=>{if(!running)renderer.render(scene,camera3d)});
+setEffect(0);
 if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
 </script>
 </body></html>
