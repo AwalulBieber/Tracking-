@@ -1,0 +1,23 @@
+name: RetroLens checks
+
+on:
+  push:
+    branches: [main, "platform/**"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  python-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Compile Python source
+        run: python -m compileall -q Retrolens.py
+      - name: Check browser assets exist
+        run: |
+          test -s web/index.html
+          test -s web/manifest.webmanifest
+          test -s web/sw.js
