@@ -1,0 +1,9 @@
+{
+  "name": "RetroLens Portal Studio",
+  "short_name": "RetroLens",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#090b14",
+  "theme_color": "#090b14",
+  "description": "Real-time hand tracking portal filters."
+}
